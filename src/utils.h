@@ -20,21 +20,6 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-#if defined(USE_CRYPTO_OPENSSL)
-
-#include <openssl/opensslv.h>
-#define USING_CRYPTO OPENSSL_VERSION_TEXT
-
-#elif defined(USE_CRYPTO_POLARSSL)
-#include <polarssl/version.h>
-#define USING_CRYPTO POLARSSL_VERSION_STRING_FULL
-
-#elif defined(USE_CRYPTO_MBEDTLS)
-#include <mbedtls/version.h>
-#define USING_CRYPTO MBEDTLS_VERSION_STRING_FULL
-
-#endif
-
 #ifndef _UTILS_H
 #define _UTILS_H
 
@@ -46,11 +31,11 @@
 #define PORTSTRLEN 16
 #define SS_ADDRSTRLEN (INET6_ADDRSTRLEN + PORTSTRLEN + 1)
 
-#ifdef ANDROID
+#ifdef __ANDROID__
 
 #include <android/log.h>
 #define USE_TTY()
-#define USE_SYSLOG(ident)
+#define USE_SYSLOG(ident, _cond)
 #define LOGI(...)                                                \
     ((void)__android_log_print(ANDROID_LOG_DEBUG, "shadowsocks", \
                                __VA_ARGS__))
@@ -58,7 +43,7 @@
     ((void)__android_log_print(ANDROID_LOG_ERROR, "shadowsocks", \
                                __VA_ARGS__))
 
-#else // not ANDROID
+#else // not __ANDROID__
 
 #define STR(x) # x
 #define TOSTR(x) STR(x)
@@ -68,7 +53,7 @@
 extern FILE *logfile;
 #define TIME_FORMAT "%Y-%m-%d %H:%M:%S"
 #define USE_TTY()
-#define USE_SYSLOG(ident)
+#define USE_SYSLOG(ident, _cond)
 #define USE_LOGFILE(ident)                                     \
     do {                                                       \
         if (ident != NULL) { logfile = fopen(ident, "w+"); } } \
@@ -114,11 +99,15 @@ extern int use_syslog;
         use_tty = isatty(STDERR_FILENO); \
     } while (0)
 
-#define USE_SYSLOG(ident)                          \
-    do {                                           \
-        use_syslog = 1;                            \
-        openlog((ident), LOG_CONS | LOG_PID, 0); } \
-    while (0)
+#define USE_SYSLOG(_ident, _cond)                               \
+    do {                                                        \
+        if (!use_syslog && (_cond)) {                           \
+            use_syslog = 1;                                     \
+        }                                                       \
+        if (use_syslog) {                                       \
+            openlog((_ident), LOG_CONS | LOG_PID, LOG_DAEMON);  \
+        }                                                       \
+    } while (0)
 
 #define LOGI(format, ...)                                                        \
     do {                                                                         \
@@ -129,10 +118,10 @@ extern int use_syslog;
             char timestr[20];                                                    \
             strftime(timestr, 20, TIME_FORMAT, localtime(&now));                 \
             if (use_tty) {                                                       \
-                fprintf(stderr, "\e[01;32m %s INFO: \e[0m" format "\n", timestr, \
+                fprintf(stdout, "\e[01;32m %s INFO: \e[0m" format "\n", timestr, \
                         ## __VA_ARGS__);                                         \
             } else {                                                             \
-                fprintf(stderr, " %s INFO: " format "\n", timestr,               \
+                fprintf(stdout, " %s INFO: " format "\n", timestr,               \
                         ## __VA_ARGS__);                                         \
             }                                                                    \
         }                                                                        \
@@ -159,7 +148,7 @@ extern int use_syslog;
 
 #endif // if LIB_ONLY
 
-#endif // if ANDROID
+#endif // if __ANDROID__
 
 void ERROR(const char *s);
 

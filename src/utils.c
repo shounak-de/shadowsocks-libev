@@ -37,6 +37,7 @@
 
 #include <sodium.h>
 
+#include "crypto.h"
 #include "utils.h"
 
 #ifdef HAVE_SETRLIMIT
@@ -300,6 +301,10 @@ usage()
         "                                  camellia-256-cfb, bf-cfb,\n");
     printf(
         "                                  chacha20-ietf-poly1305,\n");
+#ifdef FS_HAVE_XCHACHA20IETF
+    printf(
+        "                                  xchacha20-ietf-poly1305,\n");
+#endif
     printf(
         "                                  salsa20, chacha20 and chacha20-ietf.\n");
     printf(
@@ -354,6 +359,8 @@ usage()
         "       [--fast-open]              Enable TCP fast open.\n");
     printf(
         "                                  with Linux kernel > 3.7.0.\n");
+#endif
+#if defined(MODULE_REMOTE) || defined(MODULE_LOCAL)
     printf(
         "       [--acl <acl_file>]         Path to ACL (Access Control List).\n");
 #endif
@@ -372,6 +379,8 @@ usage()
         "       [--mptcp]                  Enable Multipath TCP on MPTCP Kernel.\n");
 #endif
 #ifndef MODULE_MANAGER
+    printf(
+        "       [--no-delay]               Enable TCP_NODELAY.\n");
     printf(
         "       [--key <key_in_base64>]    Key of your remote server.\n");
 #endif

@@ -163,6 +163,10 @@ read_jconf(const char *file)
     long pos = ftell(f);
     fseek(f, 0, SEEK_SET);
 
+    if (pos < 0) {
+        FATAL("Invalid config path.");
+    }
+
     if (pos >= MAX_CONF_SIZE) {
         FATAL("Too large config file.");
     }
@@ -243,7 +247,7 @@ read_jconf(const char *file)
                 conf.user = to_string(value);
             } else if (strcmp(name, "plugin") == 0) {
                 conf.plugin = to_string(value);
-                if (strlen(conf.plugin) == 0) {
+                if (conf.plugin && strlen(conf.plugin) == 0) {
                     ss_free(conf.plugin);
                     conf.plugin = NULL;
                 }
@@ -257,6 +261,10 @@ read_jconf(const char *file)
                 check_json_value_type(value, json_boolean,
                         "invalid config file: option 'reuse_port' must be a boolean");
                 conf.reuse_port = value->u.boolean;
+            } else if (strcmp(name, "disable_sni") == 0) {
+                check_json_value_type(value, json_boolean,
+                        "invalid config file: option 'disable_sni' must be a boolean");
+                conf.disable_sni = value->u.boolean;
             } else if (strcmp(name, "auth") == 0) {
                 FATAL("One time auth has been deprecated. Try AEAD ciphers instead.");
             } else if (strcmp(name, "nofile") == 0) {
@@ -287,6 +295,8 @@ read_jconf(const char *file)
             } else if (strcmp(name, "mode") == 0) {
                 char *mode_str = to_string(value);
 
+                if (mode_str == NULL)
+                    conf.mode = TCP_ONLY;
                 if (strcmp(mode_str, "tcp_only") == 0)
                     conf.mode = TCP_ONLY;
                 else if (strcmp(mode_str, "tcp_and_udp") == 0)
@@ -296,6 +306,7 @@ read_jconf(const char *file)
                 else
                     LOGI("ignore unknown mode: %s, use tcp_only as fallback",
                          mode_str);
+
                 ss_free(mode_str);
             } else if (strcmp(name, "mtu") == 0) {
                 check_json_value_type(value, json_integer,
@@ -309,6 +320,12 @@ read_jconf(const char *file)
                 check_json_value_type(value, json_boolean,
                     "invalid config file: option 'ipv6_first' must be a boolean");
                 conf.ipv6_first = value->u.boolean;
+#ifdef HAS_SYSLOG
+            } else if (strcmp(name, "use_syslog") == 0) {
+                check_json_value_type(value, json_boolean,
+                    "invalid config file: option 'use_syslog' must be a boolean");
+                use_syslog = value->u.boolean;
+#endif
             }
         }
     } else {

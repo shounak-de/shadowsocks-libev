@@ -47,7 +47,6 @@
 #endif
 
 #include <libcork/core.h>
-#include <udns.h>
 
 #include "netutils.h"
 #include "utils.h"
@@ -80,7 +79,7 @@ static void close_and_free_remote(EV_P_ remote_t *remote);
 static void free_server(server_t *server);
 static void close_and_free_server(EV_P_ server_t *server);
 
-#ifdef ANDROID
+#ifdef __ANDROID__
 int vpn = 0;
 #endif
 
@@ -95,6 +94,7 @@ static int mode      = TCP_ONLY;
 #ifdef HAVE_SETRLIMIT
 static int nofile = 0;
 #endif
+static int no_delay = 0;
 
 static struct ev_signal sigint_watcher;
 static struct ev_signal sigterm_watcher;
@@ -378,12 +378,12 @@ remote_recv_cb(EV_P_ ev_io *w, int revents)
     }
 
     // Disable TCP_NODELAY after the first response are sent
-    if (!remote->recv_ctx->connected) {
+    if (!remote->recv_ctx->connected && !no_delay) {
         int opt = 0;
         setsockopt(server->fd, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
         setsockopt(remote->fd, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
-        remote->recv_ctx->connected = 1;
     }
+    remote->recv_ctx->connected = 1;
 }
 
 static void
@@ -416,7 +416,7 @@ remote_send_cb(EV_P_ ev_io *w, int revents)
                     memset(&host, 0, sizeof(struct in_addr));
                     int host_len = sizeof(struct in_addr);
 
-                    if (dns_pton(AF_INET, sa->host, &host) == -1) {
+                    if (inet_pton(AF_INET, sa->host, &host) == -1) {
                         FATAL("IP parser error");
                     }
                     abuf->data[abuf->len++] = 1;
@@ -428,7 +428,7 @@ remote_send_cb(EV_P_ ev_io *w, int revents)
                     memset(&host, 0, sizeof(struct in6_addr));
                     int host_len = sizeof(struct in6_addr);
 
-                    if (dns_pton(AF_INET6, sa->host, &host) == -1) {
+                    if (inet_pton(AF_INET6, sa->host, &host) == -1) {
                         FATAL("IP parser error");
                     }
                     abuf->data[abuf->len++] = 4;
@@ -662,7 +662,7 @@ accept_cb(EV_P_ ev_io *w, int revents)
         return;
     }
 
-#ifdef ANDROID
+#ifdef __ANDROID__
     if (vpn) {
         int not_protect = 0;
         if (remote_addr->sa_family == AF_INET) {
@@ -789,6 +789,7 @@ main(int argc, char **argv)
 
     static struct option long_options[] = {
         { "mtu",         required_argument, NULL, GETOPT_VAL_MTU },
+        { "no-delay",    no_argument,       NULL, GETOPT_VAL_NODELAY },
         { "mptcp",       no_argument,       NULL, GETOPT_VAL_MPTCP },
         { "plugin",      required_argument, NULL, GETOPT_VAL_PLUGIN },
         { "plugin-opts", required_argument, NULL, GETOPT_VAL_PLUGIN_OPTS },
@@ -803,7 +804,7 @@ main(int argc, char **argv)
 
     USE_TTY();
 
-#ifdef ANDROID
+#ifdef __ANDROID__
     while ((c = getopt_long(argc, argv, "f:s:p:l:k:t:m:i:c:b:L:a:n:huUvV6A",
                             long_options, NULL)) != -1) {
 #else
@@ -818,6 +819,10 @@ main(int argc, char **argv)
         case GETOPT_VAL_MPTCP:
             mptcp = 1;
             LOGI("enable multipath TCP");
+            break;
+        case GETOPT_VAL_NODELAY:
+            no_delay = 1;
+            LOGI("enable TCP no-delay");
             break;
         case GETOPT_VAL_PLUGIN:
             plugin = optarg;
@@ -893,7 +898,7 @@ main(int argc, char **argv)
         case '6':
             ipv6first = 1;
             break;
-#ifdef ANDROID
+#ifdef __ANDROID__
         case 'V':
             vpn = 1;
             break;
@@ -1022,8 +1027,8 @@ main(int argc, char **argv)
         local_addr = "127.0.0.1";
     }
 
+    USE_SYSLOG(argv[0], pid_flags);
     if (pid_flags) {
-        USE_SYSLOG(argv[0]);
         daemonize(pid_path);
     }
 
